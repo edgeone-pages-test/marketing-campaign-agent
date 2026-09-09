@@ -27,6 +27,14 @@
   box-sizing: border-box;
 }
 
+/* App shell height: use dynamic viewport (dvh) so iPadOS Safari's
+   collapsing toolbar doesn't hide the bottom-pinned input bar.
+   100vh is kept as a fallback for browsers without dvh support. */
+.app-shell {
+  height: 100vh;
+  height: 100dvh;
+}
+
 body {
   margin: 0;
   font-family: var(--font-body);

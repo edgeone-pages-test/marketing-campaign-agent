@@ -71,6 +71,30 @@ async def _stream_resume(flow, feedback: str) -> FlowStreamingOutput:
 
 # ─── Streaming loop (reusable async generator) ──────────────────────
 
+def _chunk_fields(chunk) -> tuple[str, str]:
+    """Extract (agent_role, text) from a streaming item.
+
+    CrewAI >= 1.15 yields channel-based ``StreamFrame`` objects from
+    ``Flow.kickoff_async()`` (via ``astream()``), while resume streams built
+    with ``create_async_chunk_generator`` still yield legacy ``StreamChunk``
+    objects. Support both shapes.
+    """
+    data = getattr(chunk, "data", None)
+    if isinstance(data, dict):
+        # New public frame API: StreamFrame.
+        # Only LLM text chunks carry content we should show (skip thinking
+        # chunks and tool-call frames).
+        if getattr(chunk, "type", "") != "llm_stream_chunk":
+            return "", ""
+        if data.get("tool_call"):
+            return "", ""
+        return (data.get("agent_role") or "").strip(), data.get("chunk") or ""
+    # Legacy StreamChunk
+    if getattr(chunk, "chunk_type", None) == StreamChunkType.TEXT:
+        return (getattr(chunk, "agent_role", "") or "").strip(), chunk.content or ""
+    return "", ""
+
+
 async def _consume_stream(streaming, context, phase_before: str):
     """Consume a FlowStreamingOutput and yield SSE events.
 
@@ -88,7 +112,7 @@ async def _consume_stream(streaming, context, phase_before: str):
     planning_emitted = False
 
     async for chunk in streaming:
-        raw_agent = (chunk.agent_role or "").strip()
+        raw_agent, text = _chunk_fields(chunk)
         agent_role = _normalize_agent(raw_agent)
 
         # Detect agent switch
@@ -126,8 +150,7 @@ async def _consume_stream(streaming, context, phase_before: str):
             yield context.utils.sse({"type": "agent_start", "agent": agent_role, **({"lane": lane} if lane else {})})
             prev_agent = agent_role
 
-        if chunk.chunk_type == StreamChunkType.TEXT:
-            text = chunk.content or ""
+        if text:
             current_content += text
             yield context.utils.sse({"type": "chunk", "agent": agent_role or prev_agent, "content": text})
 

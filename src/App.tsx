@@ -360,7 +360,7 @@ export default function App() {
   const showInputBar = state.phase === "discovery"
 
   return (
-    <div className="flex flex-col h-screen bg-[var(--color-bg)]">
+    <div className="app-shell flex flex-col bg-[var(--color-bg)]">
       <Header
         locale={state.locale}
         onLocaleChange={handleLocaleChange}
